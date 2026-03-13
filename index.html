@@ -5,6 +5,7 @@
 <title>HULW/UFPB/EBSERH - Competitividade</title>
 
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 
@@ -140,8 +141,6 @@ font-weight:bold;
 margin-bottom:10px;
 }
 
-/* OBSERVAÇÃO */
-
 .observacao{
 margin-top:20px;
 padding:15px;
@@ -162,8 +161,6 @@ border-left:6px solid #c00000;
 color:#7a0000;
 }
 
-/* FONTES DOS DADOS */
-
 .fontes{
 margin-top:10px;
 font-size:11px;
@@ -171,7 +168,25 @@ color:#555;
 text-align:left;
 }
 
-/* IMPRESSÃO */
+.graficos{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:20px;
+margin-top:30px;
+}
+
+.grafico-card{
+background:white;
+padding:15px;
+border-radius:6px;
+box-shadow:0 0 6px rgba(0,0,0,0.06);
+}
+
+.grafico-card h3{
+margin-top:0;
+font-size:14px;
+text-align:center;
+}
 
 @media print{
 
@@ -272,6 +287,20 @@ PAINEL DE ANÁLISE DE COMPETITIVIDADE
 <tbody></tbody>
 </table>
 
+<div class="graficos">
+
+<div class="grafico-card">
+<h3>Fornecedores por Porte (ME/EPP)</h3>
+<canvas id="graficoPorte"></canvas>
+</div>
+
+<div class="grafico-card">
+<h3>Tendência de Registros no Período</h3>
+<canvas id="graficoTendencia"></canvas>
+</div>
+
+</div>
+
 <div class="fontes">
 <div>&lt;Fonte: https://dados.gov.br/dados/conjuntos-dados/compras-publicas-do-governo-federal&gt;</div>
 <div>&lt;Fonte: https://www.gov.br/pncp/pt-br&gt;</div>
@@ -284,6 +313,9 @@ PAINEL DE ANÁLISE DE COMPETITIVIDADE
 let originalData=[]
 let filteredData=[]
 let sortDirection=1
+
+let chartPorte
+let chartLinha
 
 const googleSheetCSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vTQH6JfKGvaPplebHWWPH_6GLvWTc_Fr6Jx5VoAhwqgAnfAPGKnlMhtM8AzJcalvA/pub?gid=1616332808&single=true&output=csv"
 
@@ -341,6 +373,98 @@ function updateDashboard(data){
 
 renderTable(data)
 updateCards(data)
+updateCharts(data)
+
+}
+
+function updateCharts(data){
+
+let me=0
+let epp=0
+
+data.forEach(r=>{
+
+let porte=(r["Porte"]||"").toUpperCase()
+
+if(porte==="ME") me++
+if(porte==="EPP") epp++
+
+})
+
+let datas={}
+
+data.forEach(r=>{
+
+let d=formatDateBR(r["DataObj"])
+
+if(!datas[d]) datas[d]=0
+
+datas[d]++
+
+})
+
+let labels=Object.keys(datas).sort((a,b)=>{
+
+let da=a.split("/").reverse().join("-")
+let db=b.split("/").reverse().join("-")
+
+return new Date(da)-new Date(db)
+
+})
+
+let valores=labels.map(l=>datas[l])
+
+if(chartPorte) chartPorte.destroy()
+
+chartPorte=new Chart(
+document.getElementById("graficoPorte"),
+{
+type:"bar",
+data:{
+labels:["ME","EPP"],
+datasets:[{
+label:"Quantidade",
+data:[me,epp],
+backgroundColor:["#8CC63F","#444"]
+}]
+},
+options:{
+responsive:true,
+plugins:{legend:{display:false}},
+scales:{
+x:{grid:{display:false}},
+y:{grid:{display:false}}
+}
+}
+}
+)
+
+if(chartLinha) chartLinha.destroy()
+
+chartLinha=new Chart(
+document.getElementById("graficoTendencia"),
+{
+type:"line",
+data:{
+labels:labels,
+datasets:[{
+label:"Registros",
+data:valores,
+fill:false,
+tension:0.2,
+borderColor:"#8CC63F",
+backgroundColor:"#8CC63F"
+}]
+},
+options:{
+responsive:true,
+scales:{
+x:{grid:{display:false}},
+y:{grid:{display:false}}
+}
+}
+}
+)
 
 }
 
