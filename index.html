@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-br"> 
 <head>
@@ -57,8 +56,8 @@ padding:20px;
 
 .filtros{
 display:grid;
-grid-template-columns:repeat(5,1fr);
-gap:15px;
+grid-template-columns:repeat(6,1fr);
+gap:20px;
 margin-bottom:20px;
 background:white;
 padding:15px;
@@ -139,6 +138,7 @@ cursor:pointer;
 
 #contador{
 font-weight:bold;
+margin-top: 10px;
 margin-bottom:10px;
 }
 
@@ -189,6 +189,30 @@ font-size:14px;
 text-align:center;
 }
 
+/* Overlay carregando */
+#loadingOverlay{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.4);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:9999;
+}
+
+#loadingBox{
+background:white;
+padding:20px 30px;
+border-radius:8px;
+font-weight:bold;
+font-size:18px;
+color:#444;
+box-shadow:0 0 10px rgba(0,0,0,0.2);
+}
+
 @media print{
 
 @page{
@@ -210,6 +234,10 @@ display:none;
 
 <body>
 
+<div id="loadingOverlay">
+<div id="loadingBox">Carregando...</div>
+</div>
+
 <div class="institucional">
 <div class="inst1">HOSPITAL UNIVERSITÁRIO LAURO WANDERLEY</div>
 <div class="inst2">UNIVERSIDADE FEDERAL DA PARAÍBA</div>
@@ -226,12 +254,17 @@ PAINEL DE ANÁLISE DE COMPETITIVIDADE
 
 <div>
 <label>UF</label>
-<input type="text" id="ufFilter">
+<input type="text" id="ufFilter" placeholder="Ex: PB,PE,RN...">  
 </div>
 
 <div>
 <label>Modalidade</label>
-<input type="text" id="modalidadeFilter">
+<input type="text" id="modalidadeFilter" placeholder="Ex: Pregão,Dispensa,Inex...">
+</div>
+
+<div>
+<label>Tipo</label>
+<input type="text" id="tipoFilter" placeholder="Ex: Material,Serviço">
 </div>
 
 <div>
@@ -246,7 +279,7 @@ PAINEL DE ANÁLISE DE COMPETITIVIDADE
 
 <div>
 <label>Catmat/Catser</label>
-<input type="text" id="catmatFilter">
+<input type="text" id="catmatFilter" placeholder="Digite o código">
 </div>
 
 </div>
@@ -296,7 +329,7 @@ PAINEL DE ANÁLISE DE COMPETITIVIDADE
 </div>
 
 <div class="grafico-card">
-<h3>Tendência de Registros no Período</h3>
+<h3>Tendência de Fornecedores no Período</h3>
 <canvas id="graficoTendencia"></canvas>
 </div>
 
@@ -315,12 +348,44 @@ let originalData=[]
 let filteredData=[]
 let sortDirection=1
 
-let chartPorte
-let chartLinha
+let chartPorte=null
+let chartLinha=null
 
 const googleSheetCSV="https://docs.google.com/spreadsheets/d/e/2PACX-1vTQH6JfKGvaPplebHWWPH_6GLvWTc_Fr6Jx5VoAhwqgAnfAPGKnlMhtM8AzJcalvA/pub?gid=1616332808&single=true&output=csv"
 
-window.onload=function(){
+function showLoading(){
+document.getElementById("loadingOverlay").style.display="flex"
+}
+
+function hideLoading(){
+document.getElementById("loadingOverlay").style.display="none"
+}
+
+function parseDateBR(data){
+if(!data) return null
+let p=data.split("/")
+return new Date(p[2], p[1]-1, p[0])
+}
+
+function formatDateBR(date){
+if(!date) return ""
+return date.toLocaleDateString("pt-BR")
+}
+
+function parseMulti(text){
+if(!text) return []
+return text.split(",").map(v=>v.trim().toLowerCase()).filter(v=>v)
+}
+
+function matchMulti(value,lista){
+if(lista.length===0) return true
+let v=(value||"").toLowerCase()
+return lista.some(f=>v.includes(f))
+}
+
+function applyFilters(){
+
+showLoading()
 
 fetch(googleSheetCSV)
 .then(res=>res.text())
@@ -334,39 +399,66 @@ complete:function(results){
 originalData=results.data
 
 originalData.forEach(r=>{
-r["DataObj"]=parseDateUS(r["Data da Homologação"])
+r["DataObj"]=parseDateBR(r["Data da Homologação"])
 })
 
-filteredData=[...originalData]
+filterAndRender()
+hideLoading()
+
+}
+})
+
+})
+
+}
+
+function filterAndRender(){
+
+const uf=parseMulti(document.getElementById("ufFilter").value)
+const mod=parseMulti(document.getElementById("modalidadeFilter").value)
+const tipo=parseMulti(document.getElementById("tipoFilter").value)
+const catmat=document.getElementById("catmatFilter").value.toLowerCase()
+
+const dataIni=document.getElementById("dataInicial").value
+const dataFim=document.getElementById("dataFinal").value
+
+filteredData=originalData.filter(r=>{
+
+let dataHom=r["DataObj"]
+
+let inicio=dataIni?new Date(dataIni):null
+let fim=dataFim?new Date(dataFim):null
+
+return(
+
+matchMulti(r["UF"],uf) &&
+matchMulti(r["Modalidade"],mod) &&
+matchMulti(r["Tipo"],tipo) &&
+(!catmat||(r["Catmat/Catser"]||"").toLowerCase().includes(catmat)) &&
+(!inicio||(dataHom && dataHom>=inicio)) &&
+(!fim||(dataHom && dataHom<=fim))
+
+)
+
+})
 
 updateDashboard(filteredData)
 
 }
-})
 
-})
+function clearFilters(){
 
-}
+document.querySelectorAll("input").forEach(i=>i.value="")
 
-function parseDateUS(data){
+originalData=[]
+filteredData=[]
 
-if(!data) return null
+renderTable([])
+updateCards([])
+updateCharts([])
 
-let p=data.split("/")
-
-let mes=parseInt(p[0])
-let dia=parseInt(p[1])
-let ano=parseInt(p[2])
-
-return new Date(ano,mes-1,dia)
-
-}
-
-function formatDateBR(date){
-
-if(!date) return ""
-
-return date.toLocaleDateString("pt-BR")
+document.getElementById("observacao").innerHTML=""
+document.getElementById("contador").innerHTML=""
 
 }
 
@@ -375,138 +467,6 @@ function updateDashboard(data){
 renderTable(data)
 updateCards(data)
 updateCharts(data)
-
-}
-
-function updateCharts(data){
-
-let me=0
-let epp=0
-
-data.forEach(r=>{
-
-let porte=(r["Porte"]||"").toUpperCase()
-
-if(porte==="ME") me++
-if(porte==="EPP") epp++
-
-})
-
-let datas={}
-
-data.forEach(r=>{
-
-let d=formatDateBR(r["DataObj"])
-
-if(!datas[d]) datas[d]=0
-
-datas[d]++
-
-})
-
-let labels=Object.keys(datas).sort((a,b)=>{
-
-let da=a.split("/").reverse().join("-")
-let db=b.split("/").reverse().join("-")
-
-return new Date(da)-new Date(db)
-
-})
-
-let valores=labels.map(l=>datas[l])
-
-if(chartPorte) chartPorte.destroy()
-
-chartPorte=new Chart(
-document.getElementById("graficoPorte"),
-{
-type:"bar",
-data:{
-labels:["ME","EPP"],
-datasets:[{
-label:"Quantidade",
-data:[me,epp],
-backgroundColor:["#8CC63F","#444"]
-}]
-},
-options:{
-responsive:true,
-plugins:{legend:{display:false}},
-scales:{
-x:{grid:{display:false}},
-y:{grid:{display:false}}
-}
-}
-}
-)
-
-if(chartLinha) chartLinha.destroy()
-
-chartLinha=new Chart(
-document.getElementById("graficoTendencia"),
-{
-type:"line",
-data:{
-labels:labels,
-datasets:[{
-label:"Registros",
-data:valores,
-fill:false,
-tension:0.2,
-borderColor:"#8CC63F",
-backgroundColor:"#8CC63F"
-}]
-},
-options:{
-responsive:true,
-scales:{
-x:{grid:{display:false}},
-y:{grid:{display:false}}
-}
-}
-}
-)
-
-}
-
-function atualizarObservacao(qtdFornecedores){
-
-const periodo=document.getElementById("periodo").innerText
-const catmat=document.getElementById("catmatFilter").value || "CATMAT/CATSER informado"
-const obs=document.getElementById("observacao")
-
-if(qtdFornecedores>=3){
-
-obs.className="observacao obs-positiva"
-
-obs.innerText="OBSERVAÇÃO: ✅ Com base nos dados do Portal Nacional de Dados Abertos e do Portal Nacional de Contratações Públicas referentes ao "+catmat+" utilizado na pesquisa, foram encontrados 3 (três) fornecedores ME/EPP participantes de licitações públicas federais, capazes de atender ao art. 47, II, da LC 123/2006, dentro do intervalo de "+periodo+"."
-
-}else{
-
-obs.className="observacao obs-negativa"
-
-obs.innerText="OBSERVAÇÃO: ❌ Com base nos dados do Portal Nacional de Dados Abertos e do Portal Nacional de Contratações Públicas referentes ao "+catmat+" utilizado na pesquisa, NÃO foram encontrados no mínimo 3 (três) fornecedores ME/EPP participantes de licitações públicas federais, capazes de atender ao art. 47, II, da LC 123/2006, dentro do intervalo de "+periodo+"."
-
-}
-
-}
-
-function sortTable(col){
-
-filteredData.sort((a,b)=>{
-
-let v1=a[col]||""
-let v2=b[col]||""
-
-if(v1>v2) return 1*sortDirection
-if(v1<v2) return -1*sortDirection
-return 0
-
-})
-
-sortDirection*=-1
-
-renderTable(filteredData)
 
 }
 
@@ -519,18 +479,14 @@ thead.innerHTML=""
 tbody.innerHTML=""
 
 if(data.length===0){
-
-document.getElementById("contador").innerText="0 registros encontrados"
+document.getElementById("contador").innerText=""
 return
-
 }
 
 const headers=Object.keys(data[0]).filter(h=>h!=="DataObj")
 
 let headerRow="<tr>"
-
 headers.forEach(h=>headerRow+=`<th onclick="sortTable('${h}')">${h}</th>`)
-
 headerRow+="</tr>"
 
 thead.innerHTML=headerRow
@@ -538,25 +494,16 @@ thead.innerHTML=headerRow
 let html=""
 
 data.forEach(row=>{
-
 let tr="<tr>"
-
 headers.forEach(h=>{
-
 let value=row[h]
-
 if(h==="Data da Homologação"){
 value=formatDateBR(row["DataObj"])
 }
-
 tr+=`<td>${value||""}</td>`
-
 })
-
 tr+="</tr>"
-
 html+=tr
-
 })
 
 tbody.innerHTML=html
@@ -581,60 +528,128 @@ document.getElementById("totalCNPJs").innerText=cnpjs.size
 let datas=data.map(r=>r["DataObj"]).filter(d=>d)
 
 if(datas.length>0){
-
 datas.sort((a,b)=>a-b)
-
 document.getElementById("periodo").innerText=
 formatDateBR(datas[0])+" a "+formatDateBR(datas[datas.length-1])
-
 }else{
-
 document.getElementById("periodo").innerText="-"
-
 }
 
 atualizarObservacao(cnpjs.size)
 
 }
 
-function applyFilters(){
+function atualizarObservacao(qtdFornecedores){
 
-const uf=document.getElementById("ufFilter").value.toLowerCase()
-const mod=document.getElementById("modalidadeFilter").value.toLowerCase()
-const catmat=document.getElementById("catmatFilter").value.toLowerCase()
-const dataIni=document.getElementById("dataInicial").value
-const dataFim=document.getElementById("dataFinal").value
+const periodo=document.getElementById("periodo").innerText
+const catmat=document.getElementById("catmatFilter").value || "CATMAT/CATSER informado"
+const obs=document.getElementById("observacao")
 
-filteredData=originalData.filter(r=>{
+if(qtdFornecedores>=3){
 
-let dataHom=r["DataObj"]
+obs.className="observacao obs-positiva"
+obs.innerText="OBSERVAÇÃO: ✅ Com base nos dados do Portal Nacional de Dados Abertos e do Portal Nacional de Contratações Públicas referentes ao "+catmat+" utilizado na pesquisa, foram encontrados 3 (três) fornecedores ME/EPP participantes de licitações públicas federais, capazes de atender ao art. 47, II, da LC 123/2006, dentro do intervalo de "+periodo+"."
 
-let inicio=dataIni?new Date(dataIni):null
-let fim=dataFim?new Date(dataFim):null
+}else{
 
-return(
-
-(!uf||(r["UF"]||"").toLowerCase().includes(uf)) &&
-(!mod||(r["Modalidade"]||"").toLowerCase().includes(mod)) &&
-(!catmat||(r["Catmat/Catser"]||"").toLowerCase().includes(catmat)) &&
-(!inicio||(dataHom && dataHom>=inicio)) &&
-(!fim||(dataHom && dataHom<=fim))
-
-)
-
-})
-
-updateDashboard(filteredData)
+obs.className="observacao obs-negativa"
+obs.innerText="OBSERVAÇÃO: ❌ Com base nos dados do Portal Nacional de Dados Abertos e do Portal Nacional de Contratações Públicas referentes ao "+catmat+" utilizado na pesquisa, NÃO foram encontrados no mínimo 3 (três) fornecedores ME/EPP participantes de licitações públicas federais, capazes de atender ao art. 47, II, da LC 123/2006, dentro do intervalo de "+periodo+"."
 
 }
 
-function clearFilters(){
+}
 
-document.querySelectorAll("input").forEach(i=>i.value="")
+function updateCharts(data){
 
-filteredData=[...originalData]
+if(chartPorte){chartPorte.destroy(); chartPorte=null}
+if(chartLinha){chartLinha.destroy(); chartLinha=null}
 
-updateDashboard(filteredData)
+if(data.length===0) return
+
+let me=0
+let epp=0
+
+data.forEach(r=>{
+let porte=(r["Porte"]||"").toUpperCase()
+if(porte==="ME") me++
+if(porte==="EPP") epp++
+})
+
+let fornecedoresPorData={}
+
+data.forEach(r=>{
+
+if(!r["DataObj"]) return
+
+let dataKey=formatDateBR(r["DataObj"])
+let cnpj=(r["CNPJ"]||"").replace(/\D/g,"")
+
+if(!fornecedoresPorData[dataKey]){
+fornecedoresPorData[dataKey]=new Set()
+}
+
+if(cnpj){
+fornecedoresPorData[dataKey].add(cnpj)
+}
+
+})
+
+let labels=Object.keys(fornecedoresPorData).sort((a,b)=>{
+let da=a.split("/").reverse().join("-")
+let db=b.split("/").reverse().join("-")
+return new Date(da)-new Date(db)
+})
+
+let valores=labels.map(l=>fornecedoresPorData[l].size)
+
+chartPorte=new Chart(document.getElementById("graficoPorte"),{
+type:"bar",
+data:{
+labels:["ME","EPP"],
+datasets:[{
+label:"Quantidade",
+data:[me,epp],
+backgroundColor:["#8CC63F","#444"]
+}]
+},
+options:{plugins:{legend:{display:false}}}
+})
+
+chartLinha=new Chart(document.getElementById("graficoTendencia"),{
+type:"line",
+data:{
+labels:labels,
+datasets:[{
+label:"Fornecedores", // ✅ CORREÇÃO AQUI
+data:valores,
+borderColor:"#8CC63F",
+backgroundColor:"#8CC63F",
+tension:0.2
+}]
+},
+options:{
+plugins:{
+legend:{
+display:true
+}
+}
+}
+})
+
+}
+
+function sortTable(col){
+
+filteredData.sort((a,b)=>{
+let v1=a[col]||""
+let v2=b[col]||""
+if(v1>v2) return 1*sortDirection
+if(v1<v2) return -1*sortDirection
+return 0
+})
+
+sortDirection*=-1
+renderTable(filteredData)
 
 }
 
@@ -647,14 +662,10 @@ const headers=Object.keys(filteredData[0]).filter(h=>h!=="DataObj")
 let csv=headers.join(";")+"\n"
 
 filteredData.forEach(r=>{
-
 csv+=headers.map(h=>{
-
 if(h==="Data da Homologação") return formatDateBR(r["DataObj"])
 return r[h]||""
-
 }).join(";")+"\n"
-
 })
 
 const blob=new Blob([csv],{type:"text/csv"})
