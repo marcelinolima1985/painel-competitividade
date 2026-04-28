@@ -676,8 +676,6 @@ font:{weight:"bold"},
 formatter:(value)=>value
 }
 },
-plugins:[ChartDataLabels]
-})
 onClick: function(evt, elements){
 
 if(elements.length > 0){
@@ -713,7 +711,6 @@ return (mes + "/" + ano) === mesSelecionado
 
 })
 
-// atualizar tabela com datas detalhadas
 renderTable(dadosMes)
 
 document.getElementById("contador").innerText =
@@ -721,11 +718,9 @@ dadosMes.length + " registros do mês " + mesSelecionado
 
 }
 }
-}
+},
+plugins:[ChartDataLabels]
 })
-
-}
-
 function sortTable(col){
 
 filteredData.sort((a,b)=>{
